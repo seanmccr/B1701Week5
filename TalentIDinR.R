@@ -9,6 +9,7 @@ library(summarytools)
 library(tidyverse)
 library(moments)
 library(corrplot)
+library(fmsb)
 
 
 # ----- Loading Data -----
@@ -95,7 +96,7 @@ FilteredCyclingData <- FilteredCyclingData %>%
     PeakPowerKG = peak_power/weight,
     FTP_KG = ftp/weight)
 
-# ----- Creating a new Correlation Plot -----
+# ----- Creating a New Correlation Plot -----
 
 # Creating the dataframe with the selected numeric variables
 NumericVars2 <- FilteredCyclingData %>%
@@ -159,6 +160,77 @@ PkPwPlot4 <- ggplot(FilteredCyclingData, aes(FTP_KG, weight))+
                              geom = "smooth")
 print(PkPwPlot4)
 
+# Code for creating the descriptive table
+library(summarytools)
+DescTable <- descr(FilteredCyclingData[, c(4:19)])
+print(DescTable)
 
-DescriptiveTable <- desc(FilteredCyclingData[, c(4:19)])
-print(DescriptiveTable)
+# ----- Identifying Top Performing Riders -----
+# Code to filter the cyclists who are over the given variable scores. This can be 
+# used for setting benchmarks
+TopCyclist <- FilteredCyclingData %>%
+  filter(FTP_KG > 5.25 & vo2_max > 67.57)
+# Code for ranking the cyclists in order by FTP_KG, then by Vo2 Max
+TopCyclist <- TopCyclist %>%
+  arrange(FTP_KG, vo2_max, decreasing = FALSE) %>%
+  mutate(ranking = rank(desc(FTP_KG)))
+print(TopCyclist)
+
+
+# Define the columns to normalize
+columns_to_normalize <- c("Age","vo2_max","lactate_threshold","years_experience","FTP_KG")
+
+# Compute the maximum values for the specified columns
+max_values <- apply(FilteredCyclingData[,columns_to_normalize], 2, max,na.rm=TRUE)
+
+# Normalize the specified columns (column values / max_values)
+normalized_columns <- sweep(TopCyclist[, columns_to_normalize], 2, max_values, "/")
+colnames(normalized_columns) <- paste('Norm', colnames(normalized_columns), sep = '_')
+
+# Add the normalized columns back to the TopCyclist data frame
+TopCyclist <- cbind(TopCyclist, normalized_columns)
+
+# Filter for specific rider or riders, in this case riders 1 and 10
+Riders <- TopCyclist %>%
+  filter(ranking==1 | ranking ==10)
+
+# Creating a vector with the variables we wish to include
+radar_data <- Riders[,c("Norm_years_experience", "Norm_Age", "Norm_vo2_max", "Norm_FTP_KG", "Norm_lactate_threshold", "Cyclist_ID")]
+
+# Code to define the information included in the radar chart
+radar_data <- data.frame(years_experience = c(1, 0, radar_data$Norm_years_experience),
+                         Age = c(1, 0, radar_data$Norm_Age),
+                         Vo2_max = c(1, 0, radar_data$Norm_vo2_max),
+                         FTP_Kg = c(1, 0, radar_data$Norm_FTP_Kg),
+                         Lactate_threshold = c(1,0, radar_data$Norm_lactate_threshold),
+                         row.names=c("max","min",as.character(radar_data$Cyclist_ID)))
+
+# Create the radar chart
+radar_plot <- radarchart(
+  radar_data)
+# Code for determining the radar chart properties
+legend(-3,0,
+       legend=c("P1","P10"),
+       pch=c(15, 16),
+       col=c("red","black"),
+       lty=c(2, 4))
+
+# ----- Predictive Analysis -----
+
+# Code to read in the .csv file from our filepath
+CyclingDataPredictive <- read.csv("/Users/seanmccrone/Desktop/MASTERS DEGREE/Course Material/B1701/Week 5/Week5TalentIDFiles/CyclingTI_predictive.csv")
+# Code to filter the data so we only have male cyclists
+CyclingDataPredictive <- CyclingDataPredictive %>%
+  filter(Gender == "Male")
+# Code to create two variables 'PeakPowerKG' and 'FTP_KG', and adding it to the dataset
+CyclingDataPredictive <- CyclingDataPredictive %>%
+  mutate("PeakPowerKG" = peak_power/weight,
+         "FTP_KG" = ftp/weight)
+# Code to sort the data by Cyclist_ID
+# CAN I NOT JUST CLICK CYCLIST_ID ON THE DATASET OR IS THERE A RESAON WE NEED THE CODE IN TOO?
+CyclingDataPredictive <- with(CyclingDataPredictive, CyclingDataPredictive[order(Cyclist_ID), ])
+  
+  
+  
+  
+
