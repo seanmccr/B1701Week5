@@ -160,6 +160,7 @@ PkPwPlot4 <- ggplot(FilteredCyclingData, aes(FTP_KG, weight))+
                              geom = "smooth")
 print(PkPwPlot4)
 
+# ----- Descriptive Analysis -----
 # Code for creating the descriptive table
 library(summarytools)
 DescTable <- descr(FilteredCyclingData[, c(4:19)])
