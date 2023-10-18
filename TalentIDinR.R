@@ -5,9 +5,11 @@
 install.packages("corrplot")
 install.packages("fmsb")
 install.packages("summarytools")
+install.packages("rpart.plot")
 library(summarytools)
 library(tidyverse)
 library(moments)
+library(rpart.plot)
 library(corrplot)
 library(fmsb)
 
@@ -177,7 +179,6 @@ TopCyclist <- TopCyclist %>%
   mutate(ranking = rank(desc(FTP_KG)))
 print(TopCyclist)
 
-
 # Define the columns to normalize
 columns_to_normalize <- c("Age","vo2_max","lactate_threshold","years_experience","FTP_KG")
 
@@ -230,8 +231,51 @@ CyclingDataPredictive <- CyclingDataPredictive %>%
 # Code to sort the data by Cyclist_ID
 # CAN I NOT JUST CLICK CYCLIST_ID ON THE DATASET OR IS THERE A RESAON WE NEED THE CODE IN TOO?
 CyclingDataPredictive <- with(CyclingDataPredictive, CyclingDataPredictive[order(Cyclist_ID), ])
-  
-  
-  
-  
 
+# Code to identify the most important predictor variable for the tour; in this case, it is VO2 Max
+winspredictiontour <- lm(grand_tour_wins ~ FTP_KG + vo2_max + PeakPowerKG + lactate_threshold + anxiety + height + weight+ self_efficacy + attention + technical_skill, data = CyclingDataPredictive)
+summary(winspredictiontour)
+# Code to identify the most important predictor variable for the sprint; in this case, it is PeakPowerKG
+winspredictionsprint <- lm(sprint_wins ~ FTP_KG + vo2_max + lactate_threshold + PeakPowerKG + anxiety + height + weight+ self_efficacy + attention + technical_skill, data = CyclingDataPredictive)
+summary(winspredictionsprint)
+# Code to identify the most important predictor variable for the classic; in this case, it is FTP_KG
+winspredictionclassic <- lm(classic_wins ~ FTP_KG + vo2_max + lactate_threshold + PeakPowerKG + anxiety + height + weight+ self_efficacy + attention + technical_skill, data = CyclingDataPredictive)
+summary(winspredictionclassic)
+
+# The code below creates a function called "create_train_test" which will help us split our data in 2 in the next few steps.
+CreateTrainTest <- function(data, size = 0.8, train = TRUE) {
+  n_row = nrow(data)
+  total_row = size * n_row
+  train_sample <- 1: total_row
+  if (train == TRUE) {
+    return (data[train_sample, ])
+  } else {
+    return (data[-train_sample, ])
+  }
+}
+
+# Lets create a criteria to indicate top sprinters versus those that are not. We will use more than 5 wins as a criteria for being a sprinter.
+CyclingDataPredictive <- CyclingDataPredictive %>%
+  mutate(Sprinter = ifelse(sprint_wins>5,1,0))
+
+CyclingDataPredictive2 <- subset(CyclingDataPredictive, select = c(PeakPowerKG, FTP_KG, weight, Sprinter, attention, anxiety))
+# Code to split our data into training and testing data, a 20% test - 80% training split
+data_train <- create_train_test(CyclingDataPredictive2, 0.8, train = TRUE)
+data_test <- create_train_test(CyclingDataPredictive2, 0.8, train = FALSE)
+# Code to check the probability of a performer becoming a sprinter from both test and training data sets
+prop.table(table(data_test$Sprinter))
+prop.table(table(data_train$Sprinter))
+# Code to create our decision tree using the KPIs we identified earlier using our regression analysis
+fit <- rpart(Sprinter~., data = data_train, method = 'class')
+rpart.plot(fit)
+# Code to check the test accuracy on our test sample
+AccuracyTune <- function(fit) {
+  predict_unseen <- predict(fit, data_test, type = 'class')
+  table_mat <- table(data_test$Sprinter, predict_unseen)
+  accuracy_Test <- sum(diag(table_mat)) / sum(table_mat)
+  accuracy_Test
+}
+
+AccuracyTune(fit)
+# Code to create our decision tree on the junior dataset
+FilteredCyclingData$predictions <- predict(fit, newdata = FilteredCyclingData, type = "class")
